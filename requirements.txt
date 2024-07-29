@@ -1,5 +1,6 @@
-streamlit
-google-generativeai
-youtube-transcript-api
-reportlab
-textblob
+streamlit 
+google-generativeai 
+youtube-transcript-api 
+reportlab 
+google-api-python-client 
+textblob 
