@@ -4,8 +4,6 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import io
-from googleapiclient.discovery import build
-from textblob import TextBlob
 
 # Set Streamlit page configuration
 st.set_page_config(page_title="YouTube Video Summarizer", layout="wide")
@@ -27,7 +25,7 @@ def extract_transcript_details(youtube_video_url):
         transcript = YouTubeTranscriptApi.get_transcript(video_id)
         return " ".join(segment["text"] for segment in transcript)
     except Exception as e:
-        st.sidebar.error(f"An error occurred: Could not retrieve a transcript for the video {youtube_video_url}! This is most likely caused by: Subtitles are disabled for this video.")
+        st.sidebar.error(f"An error occurred: {e}")
         return None
 
 def generate_gemini_content(transcript_text, prompt, api_key, language):
@@ -36,6 +34,11 @@ def generate_gemini_content(transcript_text, prompt, api_key, language):
         model = genai.GenerativeModel("gemini-pro")
         prompt_with_language = f"{prompt} Please generate a {summary_length.lower()} summary in {language}."
         response = model.generate_content(prompt_with_language + transcript_text)
+
+        if response.safety_ratings and any(rating.blocked for rating in response.safety_ratings):
+            st.error("The generated content was blocked due to safety ratings. Please try again with different input.")
+            return None
+        
         return response.text
     except Exception as e:
         st.error(f"An error occurred: {e}")
@@ -78,6 +81,9 @@ if google_api_key and youtube_link and st.button("Generate Summary"):
             st.error("Failed to generate summary.")
     else:
         st.error("Failed to extract transcript.")
+
+from googleapiclient.discovery import build
+from textblob import TextBlob
 
 # Initialize YouTube API client
 def initialize_youtube_client(api_key):
