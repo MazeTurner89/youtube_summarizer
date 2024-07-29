@@ -4,6 +4,8 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import io
+from googleapiclient.discovery import build
+from textblob import TextBlob
 
 # Set Streamlit page configuration
 st.set_page_config(page_title="YouTube Video Summarizer", layout="wide")
@@ -11,7 +13,7 @@ st.set_page_config(page_title="YouTube Video Summarizer", layout="wide")
 # Sidebar for user inputs
 google_api_key = st.sidebar.text_input("Google API Key:", type="password")
 youtube_link = st.sidebar.text_input("Video Link:")
-language = st.sidebar.selectbox("Select Summary Language:", options=['English', 'Hindi','Spanish', 'German', 'French'])
+language = st.sidebar.selectbox("Select Summary Language:", options=['English', 'Hindi', 'Spanish', 'German', 'French'])
 
 # Summary length customization
 summary_length = st.sidebar.select_slider(
@@ -53,6 +55,35 @@ def create_pdf(summary_text):
     buffer.seek(0)
     return buffer.getvalue()
 
+def initialize_youtube_client(api_key):
+    return build('youtube', 'v3', developerKey=api_key)
+
+def fetch_comments(youtube, video_id):
+    comments = []
+    request = youtube.commentThreads().list(
+        part="snippet",
+        videoId=video_id,
+        maxResults=100,  # Adjust as necessary
+        textFormat="plainText"
+    )
+    response = request.execute()
+    
+    for item in response.get("items", []):
+        text = item["snippet"]["topLevelComment"]["snippet"]["textDisplay"]
+        comments.append(text)
+    return comments
+
+def analyze_sentiments(comments):
+    positive = 0
+    negative = 0
+    for comment in comments:
+        sentiment = TextBlob(comment).sentiment.polarity
+        if sentiment > 0:
+            positive += 1
+        elif sentiment < 0:
+            negative += 1
+    return positive, negative
+
 # UI elements
 st.title("YouTube Video Summarizer")
 
@@ -72,47 +103,15 @@ if google_api_key and youtube_link and st.button("Generate Summary"):
             st.success("Success!")
             st.subheader("The Summary:")
             st.write(summary)
+            # Create and display PDF download button
+            pdf_data = create_pdf(summary)
+            st.download_button(label="Download Summary as PDF", data=pdf_data, file_name="summary.pdf", mime="application/pdf")
         else:
             st.error("Failed to generate summary.")
     else:
         st.error("Failed to extract transcript.")
 
-from googleapiclient.discovery import build
-from textblob import TextBlob
-
-# Initialize YouTube API client
-def initialize_youtube_client(api_key):
-    return build('youtube', 'v3', developerKey=api_key)
-
-# Fetch comments from a video
-def fetch_comments(youtube, video_id):
-    comments = []
-    request = youtube.commentThreads().list(
-        part="snippet",
-        videoId=video_id,
-        maxResults=100,  # Adjust as necessary
-        textFormat="plainText"
-    )
-    response = request.execute()
-    
-    for item in response.get("items", []):
-        text = item["snippet"]["topLevelComment"]["snippet"]["textDisplay"]
-        comments.append(text)
-    return comments
-
-# Analyze sentiment of comments
-def analyze_sentiments(comments):
-    positive = 0
-    negative = 0
-    for comment in comments:
-        sentiment = TextBlob(comment).sentiment.polarity
-        if sentiment > 0:
-            positive += 1
-        elif sentiment < 0:
-            negative += 1
-    return positive, negative
-
-# Integrate into Streamlit UI
+# Analyze comments
 if google_api_key and youtube_link and st.button("Analyze Comments"):
     youtube = initialize_youtube_client(google_api_key)
     video_id = youtube_link.split("=")[1]
