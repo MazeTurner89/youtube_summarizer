@@ -27,7 +27,7 @@ def extract_transcript_details(youtube_video_url):
         transcript = YouTubeTranscriptApi.get_transcript(video_id)
         return " ".join(segment["text"] for segment in transcript)
     except Exception as e:
-        st.sidebar.error(f"An error occurred: {e}")
+        st.sidebar.error(f"An error occurred: Could not retrieve a transcript for the video {youtube_video_url}! This is most likely caused by: Subtitles are disabled for this video.")
         return None
 
 def generate_gemini_content(transcript_text, prompt, api_key, language):
@@ -55,35 +55,6 @@ def create_pdf(summary_text):
     buffer.seek(0)
     return buffer.getvalue()
 
-def initialize_youtube_client(api_key):
-    return build('youtube', 'v3', developerKey=api_key)
-
-def fetch_comments(youtube, video_id):
-    comments = []
-    request = youtube.commentThreads().list(
-        part="snippet",
-        videoId=video_id,
-        maxResults=100,  # Adjust as necessary
-        textFormat="plainText"
-    )
-    response = request.execute()
-    
-    for item in response.get("items", []):
-        text = item["snippet"]["topLevelComment"]["snippet"]["textDisplay"]
-        comments.append(text)
-    return comments
-
-def analyze_sentiments(comments):
-    positive = 0
-    negative = 0
-    for comment in comments:
-        sentiment = TextBlob(comment).sentiment.polarity
-        if sentiment > 0:
-            positive += 1
-        elif sentiment < 0:
-            negative += 1
-    return positive, negative
-
 # UI elements
 st.title("YouTube Video Summarizer")
 
@@ -103,15 +74,44 @@ if google_api_key and youtube_link and st.button("Generate Summary"):
             st.success("Success!")
             st.subheader("The Summary:")
             st.write(summary)
-            # Create and display PDF download button
-            pdf_data = create_pdf(summary)
-            st.download_button(label="Download Summary as PDF", data=pdf_data, file_name="summary.pdf", mime="application/pdf")
         else:
             st.error("Failed to generate summary.")
     else:
         st.error("Failed to extract transcript.")
 
-# Analyze comments
+# Initialize YouTube API client
+def initialize_youtube_client(api_key):
+    return build('youtube', 'v3', developerKey=api_key)
+
+# Fetch comments from a video
+def fetch_comments(youtube, video_id):
+    comments = []
+    request = youtube.commentThreads().list(
+        part="snippet",
+        videoId=video_id,
+        maxResults=100,  # Adjust as necessary
+        textFormat="plainText"
+    )
+    response = request.execute()
+    
+    for item in response.get("items", []):
+        text = item["snippet"]["topLevelComment"]["snippet"]["textDisplay"]
+        comments.append(text)
+    return comments
+
+# Analyze sentiment of comments
+def analyze_sentiments(comments):
+    positive = 0
+    negative = 0
+    for comment in comments:
+        sentiment = TextBlob(comment).sentiment.polarity
+        if sentiment > 0:
+            positive += 1
+        elif sentiment < 0:
+            negative += 1
+    return positive, negative
+
+# Integrate into Streamlit UI
 if google_api_key and youtube_link and st.button("Analyze Comments"):
     youtube = initialize_youtube_client(google_api_key)
     video_id = youtube_link.split("=")[1]
