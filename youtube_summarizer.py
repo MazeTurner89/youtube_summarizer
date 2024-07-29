@@ -34,12 +34,13 @@ def generate_gemini_content(transcript_text, prompt, api_key, language):
         model = genai.GenerativeModel("gemini-pro")
         prompt_with_language = f"{prompt} Please generate a {summary_length.lower()} summary in {language}."
         response = model.generate_content(prompt_with_language + transcript_text)
-
-        if response.safety_ratings and any(rating.blocked for rating in response.safety_ratings):
-            st.error("The generated content was blocked due to safety ratings. Please try again with different input.")
-            return None
         
-        return response.text
+        # Check if response contains the expected content
+        if hasattr(response, 'text'):
+            return response.text
+        else:
+            st.error("The response from the model is not in the expected format.")
+            return None
     except Exception as e:
         st.error(f"An error occurred: {e}")
         return None
